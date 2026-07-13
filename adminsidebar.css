@@ -1,0 +1,120 @@
+/* =========================
+   SIDEBAR
+========================= */
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--bg-sidebar);
+    position: fixed;
+    left: 0;
+    top: 0;
+    padding: 22px 16px;
+    transition: width .3s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Collapse */
+.sidebar.collapsed {
+    width: var(--sidebar-collapsed);
+}
+
+/* =========================
+   LOGO
+========================= */
+.logo {
+    color: #fff;
+    font-weight: 600;
+    font-size: 18px;
+    margin-bottom: 30px;
+    padding-left: 6px;
+    white-space: nowrap;
+}
+
+/* =========================
+   MENU
+========================= */
+.menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+}
+
+/* Each item */
+.menu li {
+    margin-bottom: 6px;
+}
+
+/* Link */
+.menu li a {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    text-decoration: none;
+    color: #cbd5f5;
+    border-radius: 12px;
+    transition: background .2s ease, color .2s ease;
+    white-space: nowrap;
+}
+
+/* Hover */
+.menu li a:hover {
+    background: rgba(255,255,255,.08);
+}
+
+/* Active */
+.menu li.active a {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* Optional Active Left Indicator */
+.menu li.active a::before {
+    content: "";
+    width: 4px;
+    height: 20px;
+    background: #fff;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+/* =========================
+   ICON
+========================= */
+.menu li a .material-icons {
+    font-size: 20px;
+    min-width: 20px;
+}
+
+/* =========================
+   TEXT
+========================= */
+.menu-text {
+    transition: opacity .2s ease, transform .2s ease;
+}
+
+/* Collapse Effect */
+.sidebar.collapsed .menu-text {
+    opacity: 0;
+    transform: translateX(-8px);
+    pointer-events: none;
+}
+
+/* Center icons when collapsed */
+.sidebar.collapsed .menu li a {
+    justify-content: center;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width: 900px) {
+    .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
+}

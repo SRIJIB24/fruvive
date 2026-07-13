@@ -1,0 +1,114 @@
+/* =========================
+   ROOT VARIABLES
+========================= */
+:root {
+    --sidebar-width: 260px;
+    --sidebar-collapsed: 86px;
+
+    --bg-main: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-sidebar: #0f172a;
+
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+
+    --accent: #6366f1;
+    --border: #e2e8f0;
+
+    --radius: 16px;
+}
+
+/* Dark Mode */
+body.dark {
+    --bg-main: #020617;
+    --bg-card: #1e293b;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --border: #334155;
+}
+
+/* Reset */
+* {
+    box-sizing: border-box;
+    font-family: Inter, system-ui, sans-serif;
+}
+
+body {
+    margin: 0;
+    background: var(--bg-main);
+    color: var(--text-main);
+    transition: background .3s;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--bg-sidebar);
+    position: fixed;
+    left: 0;
+    top: 0;
+    padding: 22px;
+    transition: width .3s;
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-collapsed);
+}
+
+/* =========================
+   MAIN LAYOUT
+========================= */
+.main {
+    margin-left: var(--sidebar-width);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: margin-left .3s;
+}
+
+.main.collapsed {
+    margin-left: var(--sidebar-collapsed);
+}
+
+/* =========================
+   NAVBAR
+========================= */
+.navbar {
+    height: 70px;
+    padding: 0 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+}
+
+/* =========================
+   CONTENT AREA
+========================= */
+.content {
+    padding: 30px;
+    flex: 1;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+
+    .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
+
+    .main {
+        margin-left: 0;
+    }
+
+    .content {
+        padding: 20px;
+    }
+}
