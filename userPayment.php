@@ -221,7 +221,7 @@ if (isset($_POST['paynow'])) {
                 "customer_phone" => $customer_phone
             ],
             "order_meta" => [
-                "return_url" => "http://localhost/fruvive/userPayment.php?cf_order_id=" . $orderid
+                "return_url" => ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['PHP_SELF']), '/\\') . "/userPayment.php?cf_order_id=" . $orderid
             ]
         ];
 
