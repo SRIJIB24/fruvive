@@ -187,7 +187,7 @@ if (isset($_POST['submit-btn'])) {
         <?php include "userfooter.php" ?>
     </div>
 
-    <script src="usernavbar.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
 </body>
 
 </html>

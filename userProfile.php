@@ -228,7 +228,7 @@ if (isset($_POST['update-profile'])) {
 
     </div>
 
-    <script src="usernavbar.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
 
 </body>
 

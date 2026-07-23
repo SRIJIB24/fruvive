@@ -7,8 +7,21 @@ if ($object->userlvl !== -1) {
     exit();
 }
 
-// Fetch all customers (userlevel = 10)
-$stmt = $object->conn->query("SELECT id, username, email, phone, user_img, active, lastlogin FROM users WHERE userlevel = 10 ORDER BY id DESC");
+// Pagination setup
+$limit = 10;
+$page = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
+$offset = ($page - 1) * $limit;
+
+// Fetch count
+$stmtCount = $object->conn->query("SELECT COUNT(*) FROM users WHERE userlevel = 10");
+$totalRows = (int)$stmtCount->fetchColumn();
+$totalPages = ceil($totalRows / $limit);
+
+// Fetch paginated
+$stmt = $object->conn->prepare("SELECT id, username, email, phone, user_img, active, lastlogin FROM users WHERE userlevel = 10 ORDER BY id DESC LIMIT :limit OFFSET :offset");
+$stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -28,16 +41,16 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="jquery-1.9.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body>
+    <?php include "adminsidebar.php" ?>
+    
     <div class="main">
-        <?php include "adminsidebar.php" ?>
-        
-        <div class="main-content">
-            <?php include "adminnavbar.php" ?>
+        <?php include "adminnavbar.php" ?>
 
-            <div class="content p-6">
+        <div class="content p-6">
                 <!-- Header -->
                 <div class="mb-6 flex justify-between items-center">
                     <div>
@@ -103,9 +116,25 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </table>
                 </div>
 
-            </div>
-        </div>
-    </div>
+                <!-- Pagination -->
+                <?php if ($totalPages > 1) { ?>
+                <div class="flex justify-center items-center gap-2 mt-6">
+                    <?php if ($page > 1) { ?>
+                        <a href="?p=<?= $page - 1 ?>" class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold no-underline">Prev</a>
+                    <?php } ?>
+                    
+                    <?php for ($i = 1; $i <= $totalPages; $i++) { ?>
+                        <a href="?p=<?= $i ?>" class="px-3 py-1.5 rounded-lg border <?= $i === $page ? 'border-green-600 bg-green-600 text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700' ?> text-xs font-semibold no-underline"><?= $i ?></a>
+                    <?php } ?>
+                    
+                    <?php if ($page < $totalPages) { ?>
+                        <a href="?p=<?= $page + 1 ?>" class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold no-underline">Next</a>
+                    <?php } ?>
+                </div>
+                <?php } ?>
+
+            </div> <!-- Close .content -->
+        </div> <!-- Close .main -->
 
     <script>
         $(document).ready(function() {
@@ -120,11 +149,21 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     dataType: 'json',
                     success: function(response) {
                         if (!response.success) {
-                            alert('Failed to update user status: ' + (response.message || 'Unknown error'));
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Update Failed',
+                                text: 'Failed to update user status: ' + (response.message || 'Unknown error'),
+                                confirmButtonColor: '#ea580c'
+                            });
                         }
                     },
                     error: function() {
-                        alert('An error occurred while updating user status.');
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An error occurred while updating user status.',
+                            confirmButtonColor: '#ea580c'
+                        });
                     }
                 });
             });

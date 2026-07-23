@@ -93,16 +93,37 @@ if ($object->userlvl !== -1) {
             color: #7e22ce;
         }
 
+        .stat-icon.orange {
+            background: #ffedd5;
+            color: #ea580c;
+        }
+
+        .stat-icon.teal {
+            background: #ccfbf1;
+            color: #0d9488;
+        }
+
+        .stat-icon.yellow {
+            background: #fef9c3;
+            color: #ca8a04;
+        }
+
+        .stat-icon.emerald {
+            background: #d1fae5;
+            color: #059669;
+        }
+
         .stat-label {
             display: block;
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-muted);
             margin-bottom: 4px;
+            font-weight: 500;
         }
 
         .stat-value {
-            font-size: 22px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 800;
         }
     </style>
 </head>
@@ -118,47 +139,90 @@ if ($object->userlvl !== -1) {
 
         <div class="content">
             <div class="welcome-banner">
-                <h2> Welcome </h2>
-                <p>This is your dashboard overview.</p>
+                <h2>Welcome, <?= htmlspecialchars($_SESSION['username']) ?></h2>
+                <p>This is your standard store overview and business performance indicators.</p>
             </div>
 
             <div class="stats-grid">
+                <!-- Customers -->
                 <div class="card stat-card">
                     <div class="stat-icon blue">
                         <span class="material-icons">group</span>
                     </div>
                     <div>
-                        <span class="stat-label">Total Users</span>
-                        <span class="stat-value"><?php echo $object->totalUsers() ?></span>
+                        <span class="stat-label">Total Customers</span>
+                        <span class="stat-value"><?= number_format($object->totalCustomers()) ?></span>
                     </div>
                 </div>
 
+                <!-- Products -->
+                <div class="card stat-card">
+                    <div class="stat-icon orange">
+                        <span class="material-icons">inventory_2</span>
+                    </div>
+                    <div>
+                        <span class="stat-label">Total Products</span>
+                        <span class="stat-value"><?= number_format($object->totalProducts()) ?></span>
+                    </div>
+                </div>
+
+                <!-- Orders -->
+                <div class="card stat-card">
+                    <div class="stat-icon purple">
+                        <span class="material-icons">shopping_bag</span>
+                    </div>
+                    <div>
+                        <span class="stat-label">Total Orders</span>
+                        <span class="stat-value"><?= number_format($object->totalOrders()) ?></span>
+                    </div>
+                </div>
+
+                <!-- Delivered -->
                 <div class="card stat-card">
                     <div class="stat-icon green">
+                        <span class="material-icons">done_all</span>
+                    </div>
+                    <div>
+                        <span class="stat-label">Delivered Orders</span>
+                        <span class="stat-value"><?= number_format($object->totalDelivered()) ?></span>
+                    </div>
+                </div>
+
+                <!-- Today Delivered -->
+                <div class="card stat-card">
+                    <div class="stat-icon teal">
+                        <span class="material-icons">today</span>
+                    </div>
+                    <div>
+                        <span class="stat-label">Delivered Today</span>
+                        <span class="stat-value"><?= number_format($object->todayDelivered()) ?></span>
+                    </div>
+                </div>
+
+                <!-- Pending / Dispatched -->
+                <div class="card stat-card">
+                    <div class="stat-icon yellow">
+                        <span class="material-icons">pending_actions</span>
+                    </div>
+                    <div>
+                        <span class="stat-label">Pending / Transit</span>
+                        <span class="stat-value"><?= number_format($object->totalPendingDispatched()) ?></span>
+                    </div>
+                </div>
+
+                <!-- Sales Revenue -->
+                <div class="card stat-card">
+                    <div class="stat-icon emerald">
                         <span class="material-icons">payments</span>
                     </div>
                     <div>
-                        <span class="stat-label">Revenue</span>
-                        <span class="stat-value">$42,800</span>
-                    </div>
-                </div>
-
-                <div class="card stat-card">
-                    <div class="stat-icon purple">
-                        <span class="material-icons">trending_up</span>
-                    </div>
-                    <div>
-                        <span class="stat-label">Growth</span>
-                        <span class="stat-value">+14.2%</span>
+                        <span class="stat-label">Sales Revenue</span>
+                        <span class="stat-value">₹<?= number_format($object->totalRevenue(), 2) ?></span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
     <script src="admin.js"></script>
 </body>
-
 </html>
-
-<body>

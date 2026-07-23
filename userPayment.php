@@ -6,10 +6,10 @@ if (file_exists(__DIR__ . "/credentials.php")) {
 }
 require "userFunc.php";
 $object = new data();
-$object->sessionCheck();
+$isLoggedIn = $object->visitorSessionCheck();
 
-if ($object->userlvl === -1) {
-    header("Location: admin.php");
+if (!$isLoggedIn) {
+    header("Location: login.php?redirect=userPayment.php");
     exit();
 }
 
@@ -39,25 +39,33 @@ if (isset($_GET['cf_order_id'])) {
 
         if ($cf_response) {
             $cf_order = json_decode($cf_response, true);
-            if (isset($cf_order['order_status']) && $cf_order['order_status'] === 'PAID') {
+            if ($cf_order['order_status'] === 'PAID') {
                 // Success: Update status to Placed
                 $upd = $object->conn->prepare("UPDATE orders SET status = 'Placed' WHERE id = :id AND client_id = :client_id");
                 $upd->execute([':id' => $orderid, ':client_id' => CLIENT_ID]);
 
-                // Reduce stock
+                // Reduce stock and write to stock_out ledger
                 $cart = $object->fetchCart();
                 foreach ($cart as $item) {
                     $pid = $item['productid'];
                     $qty = $item['qty'];
-                    $stmt_pack = $object->conn->prepare("SELECT quant FROM products WHERE id = :id AND client_id = :client_id");
-                    $stmt_pack->execute([':id' => $pid, ':client_id' => CLIENT_ID]);
-                    $packStr = $stmt_pack->fetchColumn();
-                    $packVal = intval($packStr) ?: 1;
-                    $reduce = $packVal * $qty;
+                    $price = $item['price'];
+                    
+                    $reduce = $qty;
 
-                    $stmt_stock = $object->conn->prepare("UPDATE stock_in SET total_quant = total_quant - :reduce WHERE proid = :pid AND client_id = :client_id");
+                    $stmt_stock = $object->conn->prepare("UPDATE stock_in SET total_quant = GREATEST(0, total_quant - :reduce) WHERE proid = :pid AND client_id = :client_id");
                     $stmt_stock->execute([':reduce' => $reduce, ':pid' => $pid, ':client_id' => CLIENT_ID]);
+
+                    // Add record to stock-out ledger
+                    $longOrderId = isset($local_order['order_id']) ? $local_order['order_id'] : $orderid;
+                    $object->addStockOut($pid, $qty, "Sale (Order #{$longOrderId})", $price);
                 }
+
+                // Trigger alerts/notifications
+                $orderTotal = isset($local_order['total']) ? $local_order['total'] : 0.00;
+                $longOrderId = isset($local_order['order_id']) ? $local_order['order_id'] : $orderid;
+                $object->addNotification(null, "New Order Placed", "Order #{$longOrderId} of value ₹{$orderTotal} has been placed.", "order_created");
+                $object->addNotification($userid, "Order Confirmed", "Your order #{$longOrderId} of value ₹{$orderTotal} has been successfully confirmed.", "order_confirm");
 
                 $object->clearCart($userid);
                 unset($_SESSION['applied_coupon']);
@@ -107,16 +115,33 @@ if (isset($_POST['paynow'])) {
         $total += $item['price'] * $item['qty'];
     }
 
+    // Stock Validation
+    foreach ($cart as $item) {
+        $pid = $item['productid'];
+        $qty = $item['qty'];
+        $products = $object->stockinfetchpid($pid);
+        if (!$products || $qty > $products['total_quant']) {
+            $available = $products ? $products['total_quant'] : 0;
+            $_SESSION['payment_error'] = "Insufficient stock for " . htmlspecialchars($item['pname']) . ". Available: " . $available . " packs.";
+            header("Location: userPayment.php");
+            exit();
+        }
+    }
+
     $discount = isset($_SESSION['discount_amount']) ? $_SESSION['discount_amount'] : 0;
     $final_total = max(0, $total - $discount);
 
     $initial_status = ($payment === 'COD') ? 'Placed' : 'Pending Payment';
     
-    // Insert local order
     $insert = $object->conn->prepare("INSERT INTO orders(userid, total, payment_method, status, client_id)
     VALUES(:userid, :total, :payment, :status, :client_id)");
     $insert->execute([':userid' => $userid, ':total' => $final_total, ':payment' => $payment, ':status' => $initial_status, ':client_id' => CLIENT_ID]);
     $orderid = $object->conn->lastInsertId();
+
+    // Generate and save order_id string
+    $generated_order_id = "FRV-" . date('Ymd') . "-" . $orderid;
+    $upd_id = $object->conn->prepare("UPDATE orders SET order_id = :order_id WHERE id = :id");
+    $upd_id->execute([':order_id' => $generated_order_id, ':id' => $orderid]);
 
     // Insert local items
     foreach ($cart as $item) {
@@ -131,15 +156,21 @@ if (isset($_POST['paynow'])) {
         foreach ($cart as $item) {
             $pid = $item['productid'];
             $qty = $item['qty'];
-            $stmt_pack = $object->conn->prepare("SELECT quant FROM products WHERE id = :id AND client_id = :client_id");
-            $stmt_pack->execute([':id' => $pid, ':client_id' => CLIENT_ID]);
-            $packStr = $stmt_pack->fetchColumn();
-            $packVal = intval($packStr) ?: 1;
-            $reduce = $packVal * $qty;
+            $price = $item['price'];
+            
+            $reduce = $qty;
 
-            $stmt_stock = $object->conn->prepare("UPDATE stock_in SET total_quant = total_quant - :reduce WHERE proid = :pid AND client_id = :client_id");
+            $stmt_stock = $object->conn->prepare("UPDATE stock_in SET total_quant = GREATEST(0, total_quant - :reduce) WHERE proid = :pid AND client_id = :client_id");
             $stmt_stock->execute([':reduce' => $reduce, ':pid' => $pid, ':client_id' => CLIENT_ID]);
+
+            // Add record to stock-out ledger
+            $object->addStockOut($pid, $qty, "Sale (Order #{$generated_order_id})", $price);
         }
+
+        // Trigger alerts/notifications
+        $object->addNotification(null, "New Order Placed", "Order #{$generated_order_id} of value ₹{$final_total} has been placed.", "order_created");
+        $object->addNotification($userid, "Order Confirmed", "Your order #{$generated_order_id} of value ₹{$final_total} has been successfully confirmed.", "order_confirm");
+
         $object->clearCart($userid);
         unset($_SESSION['applied_coupon']);
         unset($_SESSION['coupon_type']);
@@ -544,7 +575,7 @@ $address = $object->fetchSelectAddress($userid);
         </script>
     <?php } ?>
 
-    <script src="usernavbar.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
 </body>
 
 </html>

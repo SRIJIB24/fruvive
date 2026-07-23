@@ -1,14 +1,9 @@
 <?php
 require "userFunc.php";
 $object = new data();
-$object->sessionCheck();
+$isLoggedIn = $object->visitorSessionCheck();
 
-$userid = $_SESSION['user_id'];
-
-if ($object->userlvl === -1) {
-    header("Location: admin.php");
-    exit();
-}
+$userid = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
 
 $object->catid = '2';
 $value = $object->fetchFruits($object->catid);
@@ -53,7 +48,7 @@ $value = $object->fetchFruits($object->catid);
 
         <!-- Catalog Grid -->
         <main class="flex-grow max-w-7xl mx-auto w-full px-4 md:px-8 pb-16">
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+            <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
                 
                 <?php foreach ($value as $val1) {
                     $proid = $val1['proid'];
@@ -65,19 +60,32 @@ $value = $object->fetchFruits($object->catid);
                     <div class="group relative bg-white dark:bg-gray-800 rounded-3xl border border-gray-200/80 dark:border-gray-700/80 p-5 shadow-sm hover:shadow-xl transition duration-300 flex flex-col justify-between">
                         
                         <div>
+                            <!-- Wishlist heart button -->
+                            <?php 
+                            $isWishlisted = false;
+                            if ($isLoggedIn) {
+                                $isWishlisted = $object->isInWishlist($userid, $proid);
+                            }
+                            ?>
+                            <button class="wishlist-btn absolute top-4 right-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-2 rounded-full shadow-sm hover:scale-110 active:scale-95 transition z-10"
+                                data-pid="<?php echo $proid; ?>" data-wishlisted="<?php echo $isWishlisted ? '1' : '0'; ?>">
+                                <span class="material-icons text-lg <?php echo $isWishlisted ? 'text-red-500' : 'text-gray-400'; ?>">
+                                    <?php echo $isWishlisted ? 'favorite' : 'favorite_border'; ?>
+                                </span>
+                            </button>
                             <!-- Discount Tag -->
                             <span class="absolute top-4 left-4 bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm z-10">
                                 10% OFF
                             </span>
 
                             <!-- Image Container -->
-                            <div class="flex justify-center overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-900 p-4 aspect-square items-center">
+                            <div class="flex justify-center overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-900 p-4 aspect-square items-center cursor-pointer quick-view-trigger" data-pid="<?php echo $proid; ?>">
                                 <img src="<?php echo htmlspecialchars($val1['img_url'] ?: 'assets/image/product-image/default.png'); ?>" alt="Product" 
                                     class="h-36 object-contain transition-transform duration-300 group-hover:scale-110">
                             </div>
 
                             <!-- Product Info -->
-                            <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition">
+                            <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition cursor-pointer quick-view-trigger" data-pid="<?php echo $proid; ?>">
                                 <?php echo htmlspecialchars($val1['pname']) ?>
                             </h3>
 
@@ -108,7 +116,10 @@ $value = $object->fetchFruits($object->catid);
 
                             <!-- Action button -->
                             <?php
-                            $count = $object->isincart($proid, $userid);
+                            $count = 0;
+                            if ($userid) {
+                                $count = $object->isincart($proid, $userid);
+                            }
                             if ($stock <= 0) {
                             ?>
                                 <button class="mt-4 w-full bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 font-semibold py-2.5 rounded-xl cursor-not-allowed" disabled>
@@ -158,8 +169,8 @@ $value = $object->fetchFruits($object->catid);
     </div>
 
     <!-- Scripts -->
-    <script src="usernavbar.js"></script>
-    <script src="userglobal.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
+    <script src="userglobal.js?v=1.3"></script>
 </body>
 
 </html>

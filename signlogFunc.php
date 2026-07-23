@@ -17,26 +17,62 @@ class users extends database
             $sql->execute([':email' => $this->email, ':client_id' => CLIENT_ID]);
             if ($sql->rowCount() == 0) {
                 $insert = $this->conn->prepare("INSERT INTO $this->table(username,email,pass,client_id) VALUES(:name,:email,:pass,:client_id)");
-                $insert->execute([':name' => $this->name, ':email' => $this->email, ':pass' => $this->pass, ':client_id' => CLIENT_ID]);
+                $hashedPass = password_hash($this->pass, PASSWORD_DEFAULT);
+                $insert->execute([':name' => $this->name, ':email' => $this->email, ':pass' => $hashedPass, ':client_id' => CLIENT_ID]);
+
+                // Create admin notification
+                $notif = $this->conn->prepare("INSERT INTO notifications (userid, title, message, type, client_id) VALUES (NULL, :title, :message, 'user_created', :client_id)");
+                $notif->execute([
+                    ':title' => "New User Registered",
+                    ':message' => "A new user account was registered: " . htmlspecialchars($this->name) . " (" . htmlspecialchars($this->email) . ").",
+                    ':client_id' => CLIENT_ID
+                ]);
 ?>
+                <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
                 <script>
-                    alert("Signup Successfully");
-                    document.location = "signup.php";
+                    document.addEventListener("DOMContentLoaded", () => {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: 'Signed Up Successfully!',
+                            confirmButtonColor: '#16a34a'
+                        }).then(() => {
+                            document.location = "signup.php";
+                        });
+                    });
                 </script>
             <?php
             } else {
             ?>
+                <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
                 <script>
-                    alert("Duplicate Data");
-                    document.location = "signup.php";
+                    document.addEventListener("DOMContentLoaded", () => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Registration Failed',
+                            text: 'Email already exists. Use another email.',
+                            confirmButtonColor: '#ea580c'
+                        }).then(() => {
+                            document.location = "signup.php";
+                        });
+                    });
                 </script>
             <?php
             }
         } else {
             ?>
+            <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
             <script>
-                alert("Fill All The Require Fields");
-                document.location = "signup.php";
+                document.addEventListener("DOMContentLoaded", () => {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Fields Required',
+                        text: 'Please fill all the required fields.',
+                        confirmButtonColor: '#ea580c'
+                    }).then(() => {
+                        document.location = "signup.php";
+                    });
+                });
             </script>
             <?php
         }
@@ -52,13 +88,33 @@ class users extends database
             if ($sql->rowCount() === 1) {
                 $val = $sql->fetch(PDO::FETCH_ASSOC);
 
-                //match password
-                if ($this->pass == $val['pass']) {
+                //match password using password_verify or fallback to plain text comparison
+                $passwordMatch = false;
+                if (password_verify($this->pass, $val['pass'])) {
+                    $passwordMatch = true;
+                } else if ($this->pass === $val['pass']) {
+                    // Password was stored in plain text, let's match it and upgrade it to a secure hash!
+                    $passwordMatch = true;
+                    $newHashedPass = password_hash($this->pass, PASSWORD_DEFAULT);
+                    $upgrade = $this->conn->prepare("UPDATE $this->table SET pass = :pass WHERE id = :id");
+                    $upgrade->execute([':pass' => $newHashedPass, ':id' => $val['id']]);
+                }
+
+                if ($passwordMatch) {
                     if (isset($val['active']) && $val['active'] == 0) {
                         ?>
+                        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
                         <script>
-                            alert("Your account is deactivated. Please contact support.");
-                            document.location = "login.php";
+                            document.addEventListener("DOMContentLoaded", () => {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Account Deactivated',
+                                    text: 'Your account is deactivated. Please contact support.',
+                                    confirmButtonColor: '#ea580c'
+                                }).then(() => {
+                                    document.location = "login.php";
+                                });
+                            });
                         </script>
                         <?php
                         exit();
@@ -76,33 +132,60 @@ class users extends database
                     $_SESSION['username'] = $val['username'];
                     $_SESSION['email'] = $val['email'];
                     $_SESSION['userlevel'] = $val['userlevel'];
-            ?>
-                    <script>
-                        alert("Login Successfully");
-                        document.location = "index.php";
-                    </script>
-                <?php
+                    if ((int)$val['userlevel'] === -1) {
+                        header("Location: admin.php");
+                    } else {
+                        header("Location: index.php");
+                    }
+                    exit();
                 } else {
                 ?>
+                    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
                     <script>
-                        alert("Wrogn Password");
-                        document.location = "login.php";
+                        document.addEventListener("DOMContentLoaded", () => {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Login Failed',
+                                text: 'Wrong password combination. Please try again.',
+                                confirmButtonColor: '#ea580c'
+                            }).then(() => {
+                                document.location = "login.php";
+                            });
+                        });
                     </script>
                 <?php
                 }
             } else {
                 ?>
+                <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
                 <script>
-                    alert("Email Not Exist");
-                    document.location = "login.php";
+                    document.addEventListener("DOMContentLoaded", () => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Login Failed',
+                            text: 'Email does not exist. Register for a new account.',
+                            confirmButtonColor: '#ea580c'
+                        }).then(() => {
+                            document.location = "login.php";
+                        });
+                    });
                 </script>
             <?php
             }
         } else {
             ?>
+            <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
             <script>
-                alert("Fill All The Require Fields");
-                document.location = "login.php";
+                document.addEventListener("DOMContentLoaded", () => {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Fields Required',
+                        text: 'Please fill all the required fields.',
+                        confirmButtonColor: '#ea580c'
+                    }).then(() => {
+                        document.location = "login.php";
+                    });
+                });
             </script>
 <?php
         }

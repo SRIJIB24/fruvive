@@ -9,6 +9,7 @@ class data extends database
 
 
     public $cname;
+    public $return_policy;
     public $cid;
     public $cidedit;
     public $ciddel;
@@ -55,6 +56,23 @@ class data extends database
         $this->userlvl = (int)$_SESSION['userlevel'];
     }
 
+    public function visitorSessionCheck()
+    {
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (isset($_SESSION['user_id'], $_SESSION['userlevel'])) {
+            $this->userlvl = (int)$_SESSION['userlevel'];
+            if ($this->userlvl === -1) {
+                header("Location: admin.php");
+                exit();
+            }
+            return true;
+        }
+        $this->userlvl = 0; // Default visitor level
+        return false;
+    }
+
 
 
     //Count total users
@@ -72,14 +90,14 @@ class data extends database
     public function catSubmit()
     {
         $edtm = date("Y-m-d H:i:s");
-        $sql = $this->conn->prepare("INSERT INTO category(cname,edtm,client_id) VALUES(:cnm,'$edtm',:client_id)");
-        $sql->execute([':cnm' => $this->cname, ':client_id' => CLIENT_ID]);
+        $sql = $this->conn->prepare("INSERT INTO category(cname,return_policy,edtm,client_id) VALUES(:cnm,:return_policy,'$edtm',:client_id)");
+        $sql->execute([':cnm' => $this->cname, ':return_policy' => $this->return_policy, ':client_id' => CLIENT_ID]);
     }
 
     //category data fetch
     public function category()
     {
-        $sql = $this->conn->prepare("SELECT id,cname FROM category WHERE client_id = :client_id");
+        $sql = $this->conn->prepare("SELECT id,cname,return_policy FROM category WHERE client_id = :client_id");
         $sql->execute([':client_id' => CLIENT_ID]);
         return $sql->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -87,7 +105,7 @@ class data extends database
     //category data fetch based on id
     public function catfetch()
     {
-        $sql = $this->conn->prepare("SELECT id,cname FROM category WHERE id = :id AND client_id = :client_id");
+        $sql = $this->conn->prepare("SELECT id,cname,return_policy FROM category WHERE id = :id AND client_id = :client_id");
         $sql->execute([':id' => $this->cid, ':client_id' => CLIENT_ID]);
         return $sql->fetch(PDO::FETCH_ASSOC);
     }
@@ -96,8 +114,8 @@ class data extends database
     public function catUpdate()
     {
         $edtm = date("Y-m-d H:i:s");
-        $sql = $this->conn->prepare("UPDATE category SET cname = :cnm, edtm = '$edtm' WHERE id = :id AND client_id = :client_id");
-        $sql->execute([':cnm' => $this->cname, ':id' => $this->cidedit, ':client_id' => CLIENT_ID]);
+        $sql = $this->conn->prepare("UPDATE category SET cname = :cnm, return_policy = :return_policy, edtm = '$edtm' WHERE id = :id AND client_id = :client_id");
+        $sql->execute([':cnm' => $this->cname, ':return_policy' => $this->return_policy, ':id' => $this->cidedit, ':client_id' => CLIENT_ID]);
     }
 
     //category name delete
@@ -295,9 +313,19 @@ class data extends database
     // fetch by productid
     public function fetchCartpid($user_id, $product_id)
     {
-        $sql = $this->conn->prepare("SELECT * FROM cart WHERE userid = :userid AND productid = :pid");
-        $sql->execute([':userid' => $user_id, ':pid' => $product_id]);
-        return $sql->fetch();
+        $sql = $this->conn->prepare("SELECT * FROM cart WHERE userid = :userid AND productid = :pid AND client_id = :client_id");
+        $sql->execute([':userid' => $user_id, ':pid' => $product_id, ':client_id' => CLIENT_ID]);
+        return $sql->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // search products
+    public function searchProducts($query)
+    {
+        $sql = $this->conn->prepare("SELECT s.*, p.pname, p.img_url FROM stock_in s
+        JOIN products p ON s.proid = p.id
+        WHERE p.pname LIKE :query AND s.client_id = :client_id AND p.client_id = :client_id");
+        $sql->execute([':query' => "%$query%", ':client_id' => CLIENT_ID]);
+        return $sql->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function cartCount($userid)
@@ -499,11 +527,334 @@ class data extends database
     }
 
     // verify coupon code
-    public function verifyCoupon($code)
+    public function verifyCoupon($code, $userid = null)
     {
         $today = date("Y-m-d");
         $sql = $this->conn->prepare("SELECT * FROM coupons WHERE code = :code AND active = 1 AND (expiry_date IS NULL OR expiry_date >= :today) AND client_id = :client_id LIMIT 1");
         $sql->execute([':code' => $code, ':today' => $today, ':client_id' => CLIENT_ID]);
-        return $sql->fetch(PDO::FETCH_ASSOC);
+        $coupon = $sql->fetch(PDO::FETCH_ASSOC);
+        
+        if ($coupon) {
+            // Check allowed_users restriction
+            if (!empty($coupon['allowed_users'])) {
+                if ($userid === null && isset($_SESSION['user_id'])) {
+                    $userid = $_SESSION['user_id'];
+                }
+                if ($userid === null) {
+                    return false; // Restricted to specific users, but no user is logged in
+                }
+                $allowed = array_map('trim', explode(',', $coupon['allowed_users']));
+                if (!in_array((string)$userid, $allowed)) {
+                    return false; // User not allowed to use this coupon
+                }
+            }
+            return $coupon;
+        }
+        return false;
+    }
+
+    // fetch top ordered products for a specific user
+    public function fetchPersonalTopProducts($userid)
+    {
+        $sql = $this->conn->prepare("SELECT s.*, p.pname, p.img_url, SUM(oi.qty) as ordered_qty 
+        FROM order_items oi
+        JOIN orders o ON oi.orderid = o.id
+        JOIN stock_in s ON oi.productid = s.proid
+        JOIN products p ON oi.productid = p.id
+        WHERE o.userid = :userid AND o.client_id = :client_id AND oi.client_id = :client_id AND s.client_id = :client_id AND p.client_id = :client_id
+        GROUP BY oi.productid
+        ORDER BY ordered_qty DESC
+        LIMIT 10");
+        $sql->execute([':userid' => $userid, ':client_id' => CLIENT_ID]);
+        return $sql->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // fetch global top ordered products for all users
+    public function fetchGlobalTopProducts()
+    {
+        $sql = $this->conn->prepare("SELECT s.*, p.pname, p.img_url, SUM(oi.qty) as ordered_qty 
+        FROM order_items oi
+        JOIN stock_in s ON oi.productid = s.proid
+        JOIN products p ON oi.productid = p.id
+        WHERE oi.client_id = :client_id AND s.client_id = :client_id AND p.client_id = :client_id
+        GROUP BY oi.productid
+        ORDER BY ordered_qty DESC
+        LIMIT 10");
+        $sql->execute([':client_id' => CLIENT_ID]);
+        return $sql->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // fetch all products in stock
+    public function fetchAllProducts()
+    {
+        $sql = $this->conn->prepare("SELECT s.*, p.pname, p.img_url 
+        FROM stock_in s
+        JOIN products p ON s.proid = p.id
+        WHERE s.client_id = :client_id AND p.client_id = :client_id");
+        $sql->execute([':client_id' => CLIENT_ID]);
+        return $sql->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // --- WISHLIST METHODS ---
+    public function addToWishlist($userid, $pid)
+    {
+        // Check if already exists to avoid duplicates
+        if ($this->isInWishlist($userid, $pid)) {
+            return true;
+        }
+        $sql = $this->conn->prepare("INSERT INTO wishlist(userid, productid, client_id) VALUES(:userid, :pid, :client_id)");
+        return $sql->execute([':userid' => $userid, ':pid' => $pid, ':client_id' => CLIENT_ID]);
+    }
+
+    public function removeFromWishlist($userid, $pid)
+    {
+        $sql = $this->conn->prepare("DELETE FROM wishlist WHERE userid = :userid AND productid = :pid AND client_id = :client_id");
+        return $sql->execute([':userid' => $userid, ':pid' => $pid, ':client_id' => CLIENT_ID]);
+    }
+
+    public function fetchWishlist($userid)
+    {
+        $sql = $this->conn->prepare("SELECT s.*, p.pname, p.img_url 
+        FROM wishlist w
+        JOIN stock_in s ON w.productid = s.proid
+        JOIN products p ON w.productid = p.id
+        WHERE w.userid = :userid AND w.client_id = :client_id AND s.client_id = :client_id AND p.client_id = :client_id");
+        $sql->execute([':userid' => $userid, ':client_id' => CLIENT_ID]);
+        return $sql->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function isInWishlist($userid, $pid)
+    {
+        $sql = $this->conn->prepare("SELECT COUNT(*) FROM wishlist WHERE userid = :userid AND productid = :pid AND client_id = :client_id");
+        $sql->execute([':userid' => $userid, ':pid' => $pid, ':client_id' => CLIENT_ID]);
+        return $sql->fetchColumn() > 0;
+    }
+
+    public function wishlistCount($userid)
+    {
+        $sql = $this->conn->prepare("SELECT COUNT(*) FROM wishlist WHERE userid = :userid AND client_id = :client_id");
+        $sql->execute([':userid' => $userid, ':client_id' => CLIENT_ID]);
+        return $sql->fetchColumn();
+    }
+
+    // --- REVIEWS METHODS ---
+    public function addProductReview($userid, $pid, $rating, $comment)
+    {
+        $sql = $this->conn->prepare("INSERT INTO reviews(userid, productid, rating, comment, client_id) VALUES(:userid, :pid, :rating, :comment, :client_id)");
+        return $sql->execute([
+            ':userid' => $userid,
+            ':pid' => $pid,
+            ':rating' => $rating,
+            ':comment' => $comment,
+            ':client_id' => CLIENT_ID
+        ]);
+    }
+
+    public function fetchProductReviews($pid)
+    {
+        $sql = $this->conn->prepare("SELECT r.*, u.username FROM reviews r
+        JOIN users u ON r.userid = u.id
+        WHERE r.productid = :pid AND r.client_id = :client_id AND u.client_id = :client_id
+        ORDER BY r.created_at DESC");
+        $sql->execute([':pid' => $pid, ':client_id' => CLIENT_ID]);
+        return $sql->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getProductRatingSummary($pid)
+    {
+        $sql = $this->conn->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE productid = :pid AND client_id = :client_id");
+        $sql->execute([':pid' => $pid, ':client_id' => CLIENT_ID]);
+        $res = $sql->fetch(PDO::FETCH_ASSOC);
+        
+        $avg = $res['avg_rating'] !== null ? round($res['avg_rating'], 1) : 0;
+        return [
+            'avg_rating' => $avg,
+            'review_count' => (int)$res['review_count']
+        ];
+    }
+
+    // --- NOTIFICATIONS METHODS ---
+    public function addNotification($userid, $title, $message, $type)
+    {
+        $stmt = $this->conn->prepare("INSERT INTO notifications (userid, title, message, type, client_id) VALUES (:userid, :title, :message, :type, :client_id)");
+        return $stmt->execute([
+            ':userid' => $userid,
+            ':title' => $title,
+            ':message' => $message,
+            ':type' => $type,
+            ':client_id' => CLIENT_ID
+        ]);
+    }
+
+    public function fetchNotifications($userid = null)
+    {
+        if ($userid === null) {
+            // Fetch for admin
+            $stmt = $this->conn->prepare("SELECT * FROM notifications WHERE userid IS NULL AND client_id = :client_id ORDER BY id DESC LIMIT 20");
+            $stmt->execute([':client_id' => CLIENT_ID]);
+        } else {
+            // Fetch for specific user
+            $stmt = $this->conn->prepare("SELECT * FROM notifications WHERE userid = :userid AND client_id = :client_id ORDER BY id DESC LIMIT 20");
+            $stmt->execute([':userid' => $userid, ':client_id' => CLIENT_ID]);
+        }
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getUnreadNotificationsCount($userid = null)
+    {
+        if ($userid === null) {
+            $stmt = $this->conn->prepare("SELECT COUNT(*) FROM notifications WHERE userid IS NULL AND is_read = 0 AND client_id = :client_id");
+            $stmt->execute([':client_id' => CLIENT_ID]);
+        } else {
+            $stmt = $this->conn->prepare("SELECT COUNT(*) FROM notifications WHERE userid = :userid AND is_read = 0 AND client_id = :client_id");
+            $stmt->execute([':userid' => $userid, ':client_id' => CLIENT_ID]);
+        }
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function markNotificationsRead($userid = null)
+    {
+        if ($userid === null) {
+            $stmt = $this->conn->prepare("UPDATE notifications SET is_read = 1 WHERE userid IS NULL AND client_id = :client_id");
+            $stmt->execute([':client_id' => CLIENT_ID]);
+        } else {
+            $stmt = $this->conn->prepare("UPDATE notifications SET is_read = 1 WHERE userid = :userid AND client_id = :client_id");
+            $stmt->execute([':userid' => $userid, ':client_id' => CLIENT_ID]);
+        }
+        return true;
+    }
+
+    // --- STOCK-OUT METHODS ---
+    public function addStockOut($proid, $qty, $reason, $sale_price = 0.00)
+    {
+        $stmt = $this->conn->prepare("INSERT INTO stock_out (proid, qty, reason, sale_price, client_id) VALUES (:proid, :qty, :reason, :sale_price, :client_id)");
+        return $stmt->execute([
+            ':proid' => $proid,
+            ':qty' => $qty,
+            ':reason' => $reason,
+            ':sale_price' => $sale_price,
+            ':client_id' => CLIENT_ID
+        ]);
+    }
+
+    // --- DASHBOARD STATS METHODS ---
+    public function totalCustomers()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM users WHERE userlevel = 10 AND client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function totalOrders()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM orders WHERE client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function totalProducts()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM products WHERE client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function totalDelivered()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM orders WHERE status = 'Delivered' AND client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function todayDelivered()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM orders WHERE status = 'Delivered' AND DATE(created_at) = CURRENT_DATE() AND client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function totalPendingDispatched()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM orders WHERE status IN ('Placed', 'Pending Payment', 'Out for Delivery', 'Shipped') AND client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function totalRevenue()
+    {
+        $stmt = $this->conn->prepare("SELECT SUM(total) FROM orders WHERE status != 'Cancelled' AND client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (float)$stmt->fetchColumn();
+    }
+
+    // --- COUPON METHODS ---
+    public function fetchCoupons($limit = null, $offset = null)
+    {
+        $sqlStr = "SELECT * FROM coupons WHERE client_id = :client_id ORDER BY id DESC";
+        if ($limit !== null && $offset !== null) {
+            $sqlStr .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+        }
+        $stmt = $this->conn->prepare($sqlStr);
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function countCoupons()
+    {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM coupons WHERE client_id = :client_id");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function couponSubmit($code, $discount_type, $discount_value, $min_cart_amount, $expiry_date, $allowed_users, $active)
+    {
+        $edtm = date("Y-m-d H:i:s");
+        $stmt = $this->conn->prepare("INSERT INTO coupons (code, discount_type, discount_value, min_cart_amount, expiry_date, allowed_users, active, client_id, edtm) VALUES (:code, :discount_type, :discount_value, :min_cart_amount, :expiry_date, :allowed_users, :active, :client_id, '$edtm')");
+        return $stmt->execute([
+            ':code' => $code,
+            ':discount_type' => $discount_type,
+            ':discount_value' => $discount_value,
+            ':min_cart_amount' => $min_cart_amount,
+            ':expiry_date' => !empty($expiry_date) ? $expiry_date : null,
+            ':allowed_users' => !empty($allowed_users) ? $allowed_users : null,
+            ':active' => $active,
+            ':client_id' => CLIENT_ID
+        ]);
+    }
+
+    public function couponFetchById($id)
+    {
+        $stmt = $this->conn->prepare("SELECT * FROM coupons WHERE id = :id AND client_id = :client_id");
+        $stmt->execute([':id' => $id, ':client_id' => CLIENT_ID]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    public function couponUpdate($id, $code, $discount_type, $discount_value, $min_cart_amount, $expiry_date, $allowed_users, $active)
+    {
+        $stmt = $this->conn->prepare("UPDATE coupons SET code = :code, discount_type = :discount_type, discount_value = :discount_value, min_cart_amount = :min_cart_amount, expiry_date = :expiry_date, allowed_users = :allowed_users, active = :active WHERE id = :id AND client_id = :client_id");
+        return $stmt->execute([
+            ':code' => $code,
+            ':discount_type' => $discount_type,
+            ':discount_value' => $discount_value,
+            ':min_cart_amount' => $min_cart_amount,
+            ':expiry_date' => !empty($expiry_date) ? $expiry_date : null,
+            ':allowed_users' => !empty($allowed_users) ? $allowed_users : null,
+            ':active' => $active,
+            ':id' => $id,
+            ':client_id' => CLIENT_ID
+        ]);
+    }
+
+    public function couponDelete($id)
+    {
+        $stmt = $this->conn->prepare("DELETE FROM coupons WHERE id = :id AND client_id = :client_id");
+        return $stmt->execute([':id' => $id, ':client_id' => CLIENT_ID]);
+    }
+
+    public function fetchCustomers()
+    {
+        $stmt = $this->conn->prepare("SELECT id, username, email FROM users WHERE userlevel = 10 AND client_id = :client_id ORDER BY username ASC");
+        $stmt->execute([':client_id' => CLIENT_ID]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

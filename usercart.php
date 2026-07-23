@@ -1,18 +1,24 @@
 <?php
 require "userFunc.php";
 $object = new data();
-$object->sessionCheck();
+$isLoggedIn = $object->visitorSessionCheck();
 
-$userid = $_SESSION['user_id'];
+$userid = $isLoggedIn ? $_SESSION['user_id'] : null;
 
-if ($object->userlvl === -1) {
+if ($isLoggedIn && $object->userlvl === -1) {
     header("Location: admin.php");
     exit();
 }
 
-$cart = $object->fetchCart();
-$address = $object->fetchSelectAddress($userid);
-$allAddresses = $object->fetchAddress($userid);
+$cart = [];
+$address = null;
+$allAddresses = [];
+
+if ($isLoggedIn) {
+    $cart = $object->fetchCart();
+    $address = $object->fetchSelectAddress($userid);
+    $allAddresses = $object->fetchAddress($userid);
+}
 
 // Handle select address change
 if (isset($_POST['select_address'])) {
@@ -176,20 +182,20 @@ $final_total = max(0, $total - $coupon_discount);
             <?php } ?>
 
             <!-- Cart Layout Grid -->
-            <?php if (empty($cart)) { ?>
-                <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-16 text-center shadow-sm">
-                    <span class="material-icons text-6xl text-gray-300 dark:text-gray-600">shopping_cart</span>
-                    <h2 class="text-xl font-bold text-gray-700 dark:text-gray-300 mt-4">Your Cart is Empty</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Add fresh organic fruits or gift baskets to get started.</p>
-                    <a href="index.php" class="mt-6 inline-block bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-xl transition shadow-md shadow-green-600/10">
-                        Continue Shopping
-                    </a>
-                </div>
-            <?php } else { ?>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    
-                    <!-- Left: Cart Items List -->
-                    <div class="lg:col-span-2 space-y-4">
+            <div id="emptyCartView" class="<?php echo ($isLoggedIn && empty($cart)) ? '' : 'hidden'; ?> bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-16 text-center shadow-sm">
+                <span class="material-icons text-6xl text-gray-300 dark:text-gray-600">shopping_cart</span>
+                <h2 class="text-xl font-bold text-gray-700 dark:text-gray-300 mt-4">Your Cart is Empty</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Add fresh organic fruits or gift baskets to get started.</p>
+                <a href="index.php" class="mt-6 inline-block bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-xl transition shadow-md shadow-green-600/10 no-underline">
+                    Continue Shopping
+                </a>
+            </div>
+
+            <div id="cartLayoutGrid" class="<?php echo ($isLoggedIn && !empty($cart)) ? '' : 'hidden'; ?> grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- Left: Cart Items List -->
+                <div id="cartItemsList" class="lg:col-span-2 space-y-4">
+                    <?php if ($isLoggedIn) { ?>
                         <?php foreach ($cart as $item) { ?>
                             <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 p-5 shadow-sm flex gap-6 hover:shadow-md transition">
                                 <!-- Image -->
@@ -217,50 +223,56 @@ $final_total = max(0, $total - $coupon_discount);
                                     <!-- Quantity selector -->
                                     <div class="flex justify-between items-center mt-4">
                                         <div class="flex items-center border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm bg-gray-50 dark:bg-gray-900">
-                                            <button onclick="qtyDec(<?= $item['id'] ?>, <?= $item['qty'] ?>)" class="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-bold text-gray-500 hover:text-gray-700 dark:hover:text-white">-</button>
+                                            <button onclick="qtyDec(<?= $item['id'] ?>, this)" class="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-bold text-gray-500 hover:text-gray-700 dark:hover:text-white">-</button>
                                             <span class="px-4 text-sm font-semibold text-gray-800 dark:text-white"><?= $item['qty'] ?></span>
-                                            <button onclick="qtyInc(<?= $item['id'] ?>, <?= $item['qty'] ?>)" class="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-bold text-gray-500 hover:text-gray-700 dark:hover:text-white">+</button>
+                                            <button onclick="qtyInc(<?= $item['id'] ?>, this)" class="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-bold text-gray-500 hover:text-gray-700 dark:hover:text-white">+</button>
                                         </div>
 
-                                        <span class="text-base font-bold text-green-600 dark:text-green-400">
+                                        <span id="item-subtotal-<?= $item['id'] ?>" class="text-base font-bold text-green-600 dark:text-green-400">
                                             ₹<?= $item['price'] * $item['qty'] ?>
                                         </span>
                                     </div>
                                 </div>
                             </div>
                         <?php } ?>
-                    </div>
+                    <?php } ?>
+                </div>
 
-                    <!-- Right: Summary & Checkout -->
-                    <div class="lg:col-span-1 lg:sticky lg:top-[80px] lg:self-start">
-                        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 p-6 shadow-sm space-y-6">
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 pb-3">Price Details</h3>
+                <!-- Right: Summary & Checkout -->
+                <div class="lg:col-span-1 lg:sticky lg:top-[80px] lg:self-start">
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 p-6 shadow-sm space-y-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 pb-3">Price Details</h3>
                             
-                            <!-- Coupon Form -->
-                            <form method="POST" class="space-y-3">
-                                <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Promo Coupon</label>
-                                <div class="flex gap-2">
-                                    <input type="text" name="coupon" placeholder="Enter Coupon Code" value="<?php echo htmlspecialchars($_SESSION['applied_coupon'] ?? ''); ?>"
-                                        class="flex-grow border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-600 transition dark:text-white">
-                                    <button type="submit" name="apply_coupon" class="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-green-600/10">
-                                        Apply
-                                    </button>
+                            <!-- Coupon Form / Guest Alert -->
+                            <?php if ($isLoggedIn) { ?>
+                                <form method="POST" class="space-y-3">
+                                    <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Promo Coupon</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" name="coupon" placeholder="Enter Coupon Code" value="<?php echo htmlspecialchars($_SESSION['applied_coupon'] ?? ''); ?>"
+                                            class="flex-grow border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-600 transition dark:text-white">
+                                        <button type="submit" name="apply_coupon" class="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-green-600/10">
+                                            Apply
+                                        </button>
+                                    </div>
+                                </form>
+                            <?php } else { ?>
+                                <div class="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-xl border border-gray-200/80 dark:border-gray-700/80 text-center">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Log in to apply promo discount coupons.</p>
+                                    <a href="login.php?redirect=usercart.php" class="mt-2 inline-block text-xs font-bold text-green-600 dark:text-green-400 hover:underline">Login Now</a>
                                 </div>
-                            </form>
+                            <?php } ?>
 
                             <!-- Calculation rows -->
                             <div class="space-y-3 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500 dark:text-gray-400">Items Total (MRP)</span>
-                                    <span class="font-semibold">₹<?= $total ?></span>
+                                    <span class="font-semibold"><span id="cartSubtotal">₹<?= $total ?></span></span>
                                 </div>
                                 
-                                <?php if ($coupon_discount > 0) { ?>
-                                    <div class="flex justify-between text-green-600 dark:text-green-400">
-                                        <span>Coupon Discount (<?= htmlspecialchars($_SESSION['applied_coupon']) ?>)</span>
-                                        <span>- ₹<?= $coupon_discount ?></span>
-                                    </div>
-                                <?php } ?>
+                                <div id="couponDiscountRow" class="flex justify-between text-green-600 dark:text-green-400 <?= ($isLoggedIn && $coupon_discount > 0) ? '' : 'hidden' ?>">
+                                    <span>Coupon Discount (<span id="couponCodeLabel"><?= htmlspecialchars($_SESSION['applied_coupon'] ?? '') ?></span>)</span>
+                                    <span>- ₹<span id="couponDiscountValue"><?= $coupon_discount ?></span></span>
+                                </div>
 
                                 <div class="flex justify-between">
                                     <span class="text-gray-500 dark:text-gray-400">Delivery Charges</span>
@@ -269,7 +281,7 @@ $final_total = max(0, $total - $coupon_discount);
 
                                 <div class="border-t border-gray-100 dark:border-gray-700 pt-4 flex justify-between text-lg font-bold text-gray-900 dark:text-white">
                                     <span>Total Amount</span>
-                                    <span>₹<?= $final_total ?></span>
+                                    <span><span id="cartFinalTotal">₹<?= $final_total ?></span></span>
                                 </div>
                             </div>
 
@@ -282,7 +294,6 @@ $final_total = max(0, $total - $coupon_discount);
                     </div>
 
                 </div>
-            <?php } ?>
 
         </main>
 
@@ -377,22 +388,88 @@ $final_total = max(0, $total - $coupon_discount);
             }, 300);
         }
 
-        // Place order validation
-        function handlePlaceOrder() {
-            <?php if (!$address) { ?>
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'No Address Selected',
-                    text: 'Please select or add a delivery address to place your order.',
-                    confirmButtonColor: '#ea580c'
-                });
-            <?php } else { ?>
-                window.location.href = 'userPayment.php';
-            <?php } ?>
+        const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+
+        if (!isLoggedIn) {
+            renderGuestCart();
         }
 
-        // Qty Increment AJAX trigger
-        function qtyInc(cartId, currentQty) {
+        // Render Guest Cart Items from LocalStorage
+        function renderGuestCart() {
+            const listContainer = document.getElementById("cartItemsList");
+            const emptyView = document.getElementById("emptyCartView");
+            const gridView = document.getElementById("cartLayoutGrid");
+
+            const cart = JSON.parse(localStorage.getItem('fruvive_cart')) || [];
+
+            if (cart.length === 0) {
+                if (gridView) gridView.classList.add("hidden");
+                if (emptyView) emptyView.classList.remove("hidden");
+                return;
+            }
+
+            if (gridView) gridView.classList.remove("hidden");
+            if (emptyView) emptyView.classList.add("hidden");
+
+            let html = "";
+            let subtotal = 0;
+
+            cart.forEach((item) => {
+                const itemTotal = item.price * item.qty;
+                subtotal += itemTotal;
+
+                html += `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 p-5 shadow-sm flex gap-6 hover:shadow-md transition">
+                    <!-- Image -->
+                    <div class="w-24 h-24 flex-shrink-0 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 flex items-center justify-center">
+                        <img src="${item.img || 'assets/image/product-image/default.png'}" class="w-20 h-20 object-contain">
+                    </div>
+
+                    <!-- Details -->
+                    <div class="flex-grow flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-start gap-4">
+                                <h3 class="text-base font-bold text-gray-900 dark:text-white">${item.pname}</h3>
+                                
+                                <!-- Delete Button -->
+                                <button onclick="removeGuestItem(${item.pid})" class="text-gray-400 hover:text-red-500 transition">
+                                    <span class="material-icons text-xl">delete_outline</span>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-0.5">Price: ₹${item.price}</p>
+                        </div>
+
+                        <!-- Quantity selector -->
+                        <div class="flex justify-between items-center mt-4">
+                            <div class="flex items-center border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm bg-gray-50 dark:bg-gray-900">
+                                <button onclick="guestQtyDec(${item.pid})" class="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-bold text-gray-500 hover:text-gray-700 dark:hover:text-white">-</button>
+                                <span class="px-4 text-sm font-semibold text-gray-800 dark:text-white">${item.qty}</span>
+                                <button onclick="guestQtyInc(${item.pid})" class="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-bold text-gray-500 hover:text-gray-700 dark:hover:text-white">+</button>
+                            </div>
+
+                            <span class="text-base font-bold text-green-600 dark:text-green-400">
+                                ₹${itemTotal}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+
+            if (listContainer) listContainer.innerHTML = html;
+
+            const subtotalEl = document.getElementById("cartSubtotal");
+            const finalTotalEl = document.getElementById("cartFinalTotal");
+            if (subtotalEl) subtotalEl.innerText = "₹" + subtotal;
+            if (finalTotalEl) finalTotalEl.innerText = "₹" + subtotal;
+        }
+
+        // Guest Increments
+        function guestQtyInc(pid) {
+            let cart = JSON.parse(localStorage.getItem('fruvive_cart')) || [];
+            const idx = cart.findIndex(item => item.pid == pid);
+            if (idx === -1) return;
+            const currentQty = cart[idx].qty;
             if (currentQty >= 5) {
                 Swal.fire({
                     icon: 'info',
@@ -402,18 +479,113 @@ $final_total = max(0, $total - $coupon_discount);
                 });
                 return;
             }
-            updateQty(cartId, currentQty + 1);
+
+            fetch("useraddcartValue.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `pid=${pid}`
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "guest_success") {
+                    if (currentQty + 1 > data.max_stock) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Stock Limit',
+                            text: "Only " + data.max_stock + " items left in stock.",
+                            confirmButtonColor: '#ea580c'
+                        });
+                        return;
+                    }
+                    cart[idx].qty = currentQty + 1;
+                    localStorage.setItem('fruvive_cart', JSON.stringify(cart));
+                    renderGuestCart();
+                    updateNavbarCartBadge();
+                }
+            });
+        }
+
+        // Guest Decrements
+        function guestQtyDec(pid) {
+            let cart = JSON.parse(localStorage.getItem('fruvive_cart')) || [];
+            const idx = cart.findIndex(item => item.pid == pid);
+            if (idx === -1) return;
+            const currentQty = cart[idx].qty;
+            if (currentQty <= 1) return;
+
+            cart[idx].qty = currentQty - 1;
+            localStorage.setItem('fruvive_cart', JSON.stringify(cart));
+            renderGuestCart();
+            updateNavbarCartBadge();
+        }
+
+        // Remove Guest Item
+        function removeGuestItem(pid) {
+            let cart = JSON.parse(localStorage.getItem('fruvive_cart')) || [];
+            cart = cart.filter(item => item.pid != pid);
+            localStorage.setItem('fruvive_cart', JSON.stringify(cart));
+            renderGuestCart();
+            updateNavbarCartBadge();
+        }
+
+        // Place order validation
+        function handlePlaceOrder() {
+            if (!isLoggedIn) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Login Required',
+                    text: 'Please login or create an account to proceed with your checkout.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Login Now',
+                    confirmButtonColor: '#16a34a',
+                    cancelButtonColor: '#9ca3af'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = 'login.php?redirect=usercart.php';
+                    }
+                });
+                return;
+            }
+
+            <?php if ($isLoggedIn && !$address) { ?>
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'No Address Selected',
+                    text: 'Please select or add a delivery address to place your order.',
+                    confirmButtonColor: '#ea580c'
+                });
+            <?php } else if ($isLoggedIn) { ?>
+                window.location.href = 'userPayment.php';
+            <?php } ?>
+        }
+
+        // Qty Increment AJAX trigger
+        function qtyInc(cartId, button) {
+            const span = button.previousElementSibling;
+            const currentQty = parseInt(span.innerText);
+            if (currentQty >= 5) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Limit Reached',
+                    text: 'You can add up to 5 items of a single product to your cart.',
+                    confirmButtonColor: '#16a34a'
+                });
+                return;
+            }
+            updateQty(cartId, currentQty + 1, span);
         }
 
         // Qty Decrement AJAX trigger
-        function qtyDec(cartId, currentQty) {
+        function qtyDec(cartId, button) {
+            const span = button.nextElementSibling;
+            const currentQty = parseInt(span.innerText);
             if (currentQty <= 1) {
                 return;
             }
-            updateQty(cartId, currentQty - 1);
+            updateQty(cartId, currentQty - 1, span);
         }
 
-        function updateQty(cartId, newQty) {
+        function updateQty(cartId, newQty, spanEl) {
             $.ajax({
                 url: 'usercartUpdate.php',
                 type: 'POST',
@@ -426,8 +598,43 @@ $final_total = max(0, $total - $coupon_discount);
                             text: response.message,
                             confirmButtonColor: '#ea580c'
                         });
-                    } else {
-                        window.location.reload();
+                    } else if (response && response.status === "success") {
+                        // Update quantity span
+                        spanEl.innerText = response.qty;
+                        
+                        // Update item subtotal
+                        const itemSubtotalEl = document.getElementById("item-subtotal-" + cartId);
+                        if (itemSubtotalEl) {
+                            itemSubtotalEl.innerText = "₹" + response.item_subtotal;
+                        }
+                        
+                        // Update cart subtotal
+                        const subtotalEl = document.getElementById("cartSubtotal");
+                        if (subtotalEl) {
+                            subtotalEl.innerText = "₹" + response.cart_subtotal;
+                        }
+                        
+                        // Update coupon discount row
+                        const couponRow = document.getElementById("couponDiscountRow");
+                        if (couponRow) {
+                            if (response.coupon_discount > 0) {
+                                couponRow.classList.remove("hidden");
+                                const codeLabel = document.getElementById("couponCodeLabel");
+                                if (codeLabel) codeLabel.innerText = response.coupon_code;
+                                const valLabel = document.getElementById("couponDiscountValue");
+                                if (valLabel) valLabel.innerText = response.coupon_discount;
+                            } else {
+                                couponRow.classList.add("hidden");
+                            }
+                        }
+                        
+                        // Update final total
+                        const finalTotalEl = document.getElementById("cartFinalTotal");
+                        if (finalTotalEl) {
+                            finalTotalEl.innerText = "₹" + response.final_total;
+                        }
+                        
+                        updateNavbarCartBadge();
                     }
                 },
                 error: function() {
@@ -442,7 +649,8 @@ $final_total = max(0, $total - $coupon_discount);
         }
     </script>
 
-    <script src="usernavbar.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
+    <script src="userglobal.js?v=1.3"></script>
 </body>
 
 </html>

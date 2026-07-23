@@ -64,8 +64,8 @@ if ($object->userlvl === -1) {
                         Continue Shopping
                     </a>
                     
-                    <a href="userProfile.php" class="block w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl transition">
-                        View Account Profile
+                    <a href="userOrders.php" class="block w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl transition">
+                        View Orders
                     </a>
                 </div>
 
@@ -76,7 +76,7 @@ if ($object->userlvl === -1) {
     </div>
 
     <!-- Scripts -->
-    <script src="usernavbar.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
 </body>
 
 </html>

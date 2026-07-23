@@ -20,8 +20,9 @@ $query_str = "SELECT * FROM orders WHERE userid = :userid AND client_id = :clien
 $params = [':userid' => $userid, ':client_id' => CLIENT_ID];
 
 if ($search_id !== '') {
-    $query_str .= " AND id = :search_id";
-    $params[':search_id'] = intval($search_id);
+    $query_str .= " AND (order_id LIKE :search_id OR id = :search_id_num)";
+    $params[':search_id'] = '%' . $search_id . '%';
+    $params[':search_id_num'] = intval($search_id);
 }
 
 if ($filter_method !== '') {
@@ -62,6 +63,7 @@ $count = $object->cartCount($userid);
     <!-- Material Icons & Google Fonts -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <style>
         body {
@@ -95,7 +97,7 @@ $count = $object->cartCount($userid);
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
                                 <span class="material-icons text-[18px]">search</span>
                             </span>
-                            <input type="number" name="search_id" value="<?= htmlspecialchars($search_id) ?>" placeholder="e.g. 5"
+                            <input type="text" name="search_id" value="<?= htmlspecialchars($search_id) ?>" placeholder="e.g. FRV-20260720-7"
                                 class="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-sm focus:border-green-600 focus:ring-1 focus:ring-green-600 focus:outline-none dark:text-white transition">
                         </div>
                     </div>
@@ -142,92 +144,127 @@ $count = $object->cartCount($userid);
                 </form>
             </div>
 
-            <!-- Orders Table List Card -->
-            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm overflow-hidden">
-                
+            <!-- Orders Cards List -->
+            <div class="space-y-6">
                 <?php if (count($orders) > 0) { ?>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-gray-50 dark:bg-gray-900/40 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                                    <th class="px-6 py-4">Order ID</th>
-                                    <th class="px-6 py-4">Date</th>
-                                    <th class="px-6 py-4">Payment Method</th>
-                                    <th class="px-6 py-4">Amount</th>
-                                    <th class="px-6 py-4">Status</th>
-                                    <th class="px-6 py-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
-                                <?php foreach ($orders as $order) { ?>
-                                    <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 transition">
-                                        <!-- ID -->
-                                        <td class="px-6 py-4 font-bold text-gray-900 dark:text-white">
-                                            #<?= $order['id'] ?>
-                                        </td>
-                                        
-                                        <!-- Date -->
-                                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                            <?= date('d M Y, h:i A', strtotime($order['created_at'])) ?>
-                                        </td>
-                                        
-                                        <!-- Payment Method -->
-                                        <td class="px-6 py-4">
-                                            <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full 
-                                                <?= $order['payment_method'] === 'COD' 
-                                                    ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200' 
-                                                    : 'bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400' ?>">
-                                                <span class="material-icons text-[14px]">
-                                                    <?= $order['payment_method'] === 'COD' ? 'payments' : 'account_balance_wallet' ?>
-                                                </span>
-                                                <?= htmlspecialchars($order['payment_method']) ?>
-                                            </span>
-                                        </td>
-                                        
-                                        <!-- Total -->
-                                        <td class="px-6 py-4 font-extrabold text-gray-900 dark:text-white">
-                                            ₹<?= htmlspecialchars($order['total']) ?>
-                                        </td>
-                                        
-                                        <!-- Status -->
-                                        <td class="px-6 py-4">
-                                            <?php if ($order['status'] === 'Placed') { ?>
-                                                <span class="inline-flex items-center gap-1 text-xs font-bold text-green-600 dark:text-green-400">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                                    Placed / Paid
-                                                </span>
-                                            <?php } else { ?>
-                                                <span class="inline-flex items-center gap-1 text-xs font-bold text-amber-500 dark:text-amber-400">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                    Pending Payment
-                                                </span>
-                                            <?php } ?>
-                                        </td>
-                                        
-                                        <!-- Actions -->
-                                        <td class="px-6 py-4 text-right flex items-center justify-end gap-2.5">
-                                            <!-- View Details -->
-                                            <button onclick="viewDetails(<?= $order['id'] ?>)"
-                                                class="inline-flex items-center justify-center p-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition"
-                                                title="View Details">
-                                                <span class="material-icons text-[18px]">visibility</span>
-                                            </button>
-                                            
-                                            <!-- Download Invoice -->
-                                            <a href="downloadInvoice.php?order_id=<?= $order['id'] ?>"
-                                                class="inline-flex items-center justify-center p-2 rounded-xl bg-green-50 hover:bg-green-100 dark:bg-green-950/20 dark:hover:bg-green-950/40 text-green-600 dark:text-green-400 transition"
-                                                title="Download Invoice">
-                                                <span class="material-icons text-[18px]">download_for_offline</span>
-                                            </a>
-                                        </td>
-                                    </tr>
+                    <?php foreach ($orders as $order) { 
+                        // Fetch items for this order
+                        $stmt_items = $object->conn->prepare("
+                            SELECT oi.*, p.pname, p.quant, p.img_url 
+                            FROM order_items oi 
+                            JOIN products p ON oi.productid = p.id 
+                            WHERE oi.orderid = :orderid AND oi.client_id = :client_id
+                        ");
+                        $stmt_items->execute([':orderid' => $order['id'], ':client_id' => CLIENT_ID]);
+                        $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        $status = $order['status'];
+                        $statusColor = 'text-amber-500 bg-amber-50 dark:bg-amber-950/20';
+                        $statusIcon = 'pending';
+                        if ($status === 'Placed') {
+                            $statusColor = 'text-blue-650 bg-blue-50 dark:bg-blue-950/20';
+                            $statusIcon = 'check_circle';
+                        } elseif ($status === 'Dispatched') {
+                            $statusColor = 'text-orange-500 bg-orange-50 dark:bg-orange-950/20';
+                            $statusIcon = 'local_shipping';
+                        } elseif ($status === 'Delivered') {
+                            $statusColor = 'text-green-650 bg-green-50 dark:bg-green-950/20';
+                            $statusIcon = 'task_alt';
+                        } elseif ($status === 'Cancelled') {
+                            $statusColor = 'text-red-650 bg-red-50 dark:bg-red-950/20';
+                            $statusIcon = 'cancel';
+                        } elseif ($status === 'Returned') {
+                            $statusColor = 'text-purple-650 bg-purple-50 dark:bg-purple-950/20';
+                            $statusIcon = 'assignment_return';
+                        }
+                    ?>
+                        <div class="bg-white dark:bg-gray-800 rounded-3xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm hover:shadow-lg transition duration-300 overflow-hidden">
+                            <!-- Card Header -->
+                            <div class="px-6 py-4 bg-gray-50/50 dark:bg-gray-900/10 border-b border-gray-100 dark:border-gray-700 flex flex-wrap justify-between items-center gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2.5 bg-green-50 dark:bg-green-950/30 rounded-xl text-green-600 dark:text-green-400">
+                                        <span class="material-icons text-[20px]">shopping_bag</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order ID</p>
+                                        <p class="text-sm font-bold text-gray-900 dark:text-white"><?= htmlspecialchars($order['order_id'] ?: '#' . $order['id']) ?></p>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-6">
+                                    <div>
+                                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Date Placed</p>
+                                        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300"><?= date('d M Y, h:i A', strtotime($order['created_at'])) ?></p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Payment</p>
+                                        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                            <?= htmlspecialchars($order['payment_method']) ?>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Amount</p>
+                                        <p class="text-sm font-extrabold text-green-600 dark:text-green-450">₹<?= htmlspecialchars($order['total']) ?></p>
+                                    </div>
+                                    <span class="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full <?= $statusColor ?>">
+                                        <span class="material-icons text-[14px]"><?= $statusIcon ?></span>
+                                        <?= htmlspecialchars($status === 'Placed' ? 'Placed / Paid' : $status) ?>
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <!-- Card Body (Items list) -->
+                            <div class="p-6 divide-y divide-gray-150/60 dark:divide-gray-700">
+                                <?php foreach ($items as $item) { ?>
+                                    <div class="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+                                        <div class="flex items-center gap-4 min-w-0">
+                                            <img src="<?= htmlspecialchars($item['img_url'] ?: 'assets/image/product-image/default.png') ?>" alt="Product" class="w-16 h-16 object-contain rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-1">
+                                            <div class="min-w-0">
+                                                <h4 class="font-bold text-sm text-gray-900 dark:text-white truncate"><?= htmlspecialchars($item['pname']) ?></h4>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Pack size: <?= htmlspecialchars($item['quant']) ?></p>
+                                                <p class="text-xs text-gray-400 mt-0.5">Qty: <?= htmlspecialchars($item['qty']) ?> &times; ₹<?= htmlspecialchars($item['price']) ?></p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-extrabold text-sm text-gray-900 dark:text-white">₹<?= htmlspecialchars($item['price'] * $item['qty']) ?></p>
+                                        </div>
+                                    </div>
                                 <?php } ?>
-                            </tbody>
-                        </table>
-                    </div>
+                            </div>
+                            
+                            <!-- Card Footer -->
+                            <div class="px-6 py-4 bg-gray-50/30 dark:bg-gray-900/5 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    <?php if (!empty($order['delivery_boy'])) { ?>
+                                        <span class="flex items-center gap-1.5">
+                                            <span class="material-icons text-green-600 dark:text-green-400 text-sm">local_shipping</span>
+                                            Delivery Agent: <strong class="text-gray-750 dark:text-white"><?= htmlspecialchars($order['delivery_boy']) ?></strong> (<?= htmlspecialchars($order['delivery_status'] ?: 'Pending') ?>)
+                                        </span>
+                                    <?php } else { ?>
+                                        <span class="flex items-center gap-1.5 text-gray-400">
+                                            <span class="material-icons text-sm">hourglass_empty</span>
+                                            Awaiting delivery assignment.
+                                        </span>
+                                    <?php } ?>
+                                </div>
+                                <div class="flex gap-3 justify-end">
+                                    <!-- View Details Button -->
+                                    <button onclick="viewDetails(<?= $order['id'] ?>)" class="bg-green-600 hover:bg-green-700 text-white font-bold text-xs py-2.5 px-5 rounded-xl shadow-md shadow-green-600/10 active:scale-98 transition flex items-center gap-1.5">
+                                        <span class="material-icons text-base">route</span>
+                                        Track & Manage Details
+                                    </button>
+                                    
+                                    <!-- Download Invoice -->
+                                    <a href="downloadInvoice.php?order_id=<?= $order['id'] ?>" class="border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300 font-bold text-xs py-2.5 px-4 rounded-xl transition flex items-center gap-1">
+                                        <span class="material-icons text-base">download_for_offline</span>
+                                        Invoice
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php } ?>
                 <?php } else { ?>
                     <!-- Empty State -->
-                    <div class="text-center py-16 px-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-3xl border border-gray-200/80 dark:border-gray-700/80 text-center py-16 px-4 shadow-sm">
                         <span class="material-icons text-gray-300 dark:text-gray-600 text-6xl">receipt_long</span>
                         <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white">No Orders Found</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-sm mx-auto">We couldn't find any order history matching your current filter selection.</p>
@@ -237,7 +274,6 @@ $count = $object->cartCount($userid);
                         </a>
                     </div>
                 <?php } ?>
-
             </div>
 
         </main>
@@ -247,12 +283,12 @@ $count = $object->cartCount($userid);
 
     <!-- Order Details Modal -->
     <div id="detailsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-300 z-50">
-        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 transform scale-95 transition-all duration-300">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 transform scale-95 transition-all duration-300">
             <!-- Modal Header -->
             <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
                 <h3 class="font-extrabold text-gray-900 dark:text-white text-lg flex items-center gap-2">
                     <span class="material-icons text-green-600 dark:text-green-400">receipt_long</span>
-                    Order Details
+                    Order Details & Tracking
                 </h3>
                 <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition">
                     <span class="material-icons">close</span>
@@ -323,8 +359,224 @@ $count = $object->cartCount($userid);
                 closeModal();
             }
         });
+
+        function openOrderReview(pid, pname) {
+            closeModal(); // close the order details modal
+            
+            Swal.fire({
+                title: 'Rate & Review',
+                html: `
+                    <div class="text-left space-y-4">
+                        <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">How would you rate <strong class="text-gray-850 dark:text-white">${pname}</strong>?</p>
+                        
+                        <!-- Stars Selector -->
+                        <div class="flex items-center gap-1.5 my-3" id="swalStars">
+                            <span class="material-icons text-gray-300 cursor-pointer text-3xl hover:scale-110 active:scale-95 transition" data-val="1">star_border</span>
+                            <span class="material-icons text-gray-300 cursor-pointer text-3xl hover:scale-110 active:scale-95 transition" data-val="2">star_border</span>
+                            <span class="material-icons text-gray-300 cursor-pointer text-3xl hover:scale-110 active:scale-95 transition" data-val="3">star_border</span>
+                            <span class="material-icons text-gray-300 cursor-pointer text-3xl hover:scale-110 active:scale-95 transition" data-val="4">star_border</span>
+                            <span class="material-icons text-gray-300 cursor-pointer text-3xl hover:scale-110 active:scale-95 transition" data-val="5">star_border</span>
+                        </div>
+                        
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Your Feedback</label>
+                        <textarea id="swalComment" rows="3" placeholder="Share your experience with this fresh fruit..." class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-sm focus:border-green-600 focus:outline-none transition dark:text-white"></textarea>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Submit Review',
+                confirmButtonColor: '#16a34a',
+                cancelButtonColor: '#d33',
+                didOpen: () => {
+                    let selectedRating = 0;
+                    const stars = document.querySelectorAll('#swalStars .material-icons');
+                    stars.forEach((star) => {
+                        star.addEventListener('click', function() {
+                            selectedRating = parseInt(this.getAttribute('data-val'));
+                            stars.forEach((s, idx) => {
+                                if (idx < selectedRating) {
+                                    s.innerText = 'star';
+                                    s.classList.remove('text-gray-300');
+                                    s.classList.add('text-amber-400');
+                                } else {
+                                    s.innerText = 'star_border';
+                                    s.classList.remove('text-amber-400');
+                                    s.classList.add('text-gray-300');
+                                }
+                            });
+                        });
+                    });
+                    window.swalSelectedRating = () => selectedRating;
+                },
+                preConfirm: () => {
+                    const rating = window.swalSelectedRating();
+                    const comment = document.getElementById('swalComment').value.trim();
+                    if (rating === 0) {
+                        Swal.showValidationMessage('Please select a star rating first.');
+                        return false;
+                    }
+                    return { rating: rating, comment: comment };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const data = result.value;
+                    // Submit via Fetch API
+                    fetch('submitReview.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `productid=${pid}&rating=${data.rating}&comment=${encodeURIComponent(data.comment)}`
+                    })
+                    .then(res => res.json())
+                    .then(resData => {
+                        if (resData.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Thank You!',
+                                text: 'Your review has been submitted successfully.',
+                                confirmButtonColor: '#16a34a'
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Submission Failed',
+                                text: resData.message || 'Unable to save review.',
+                                confirmButtonColor: '#ea580c'
+                            });
+                        }
+                    })
+                    .catch(() => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An error occurred during submission.',
+                            confirmButtonColor: '#ea580c'
+                        });
+                    });
+                }
+            });
+        }
+
+        function initiateWholeOrderReturn(orderId) {
+            closeModal();
+            Swal.fire({
+                title: 'Return Entire Order',
+                text: 'Please select a reason for returning all items:',
+                input: 'select',
+                inputOptions: {
+                    'product_missing': 'Product Missing',
+                    'damaged_product': 'Damaged Product',
+                    'unsatisfactory_quality': 'Unsatisfactory Quality',
+                    'wrong_item': 'Wrong Item Delivered',
+                    'other': 'Other'
+                },
+                inputPlaceholder: '-- Select Reason --',
+                showCancelButton: true,
+                confirmButtonText: 'Submit Return Request',
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'You must select a reason!';
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    submitReturnRequest(orderId, null, 1, result.value);
+                }
+            });
+        }
+
+        function initiateProductReturn(orderId, productId, productName, maxQty) {
+            closeModal();
+            Swal.fire({
+                title: `Return Item: ${productName}`,
+                text: 'Please select a reason for returning this item:',
+                input: 'select',
+                inputOptions: {
+                    'product_missing': 'Product Missing',
+                    'damaged_product': 'Damaged Product',
+                    'unsatisfactory_quality': 'Unsatisfactory Quality',
+                    'wrong_item': 'Wrong Item Delivered',
+                    'other': 'Other'
+                },
+                inputPlaceholder: '-- Select Reason --',
+                showCancelButton: true,
+                confirmButtonText: 'Submit Return',
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'You must select a reason!';
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const reason = result.value;
+                    if (maxQty > 1) {
+                        Swal.fire({
+                            title: 'Quantity to Return',
+                            text: `Enter quantity (1 to ${maxQty}):`,
+                            input: 'number',
+                            inputValue: maxQty,
+                            showCancelButton: true,
+                            confirmButtonText: 'Submit',
+                            confirmButtonColor: '#ef4444',
+                            inputValidator: (val) => {
+                                const q = parseInt(val);
+                                if (isNaN(q) || q < 1 || q > maxQty) {
+                                    return `Please enter a valid quantity between 1 and ${maxQty}!`;
+                                }
+                            }
+                        }).then((qtyResult) => {
+                            if (qtyResult.isConfirmed) {
+                                submitReturnRequest(orderId, productId, parseInt(qtyResult.value), reason);
+                            }
+                        });
+                    } else {
+                        submitReturnRequest(orderId, productId, 1, reason);
+                    }
+                }
+            });
+        }
+
+        function submitReturnRequest(orderId, productId, qty, reason) {
+            fetch('submitReturn.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order_id: orderId, product_id: productId, qty: qty, reason: reason })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: data.message,
+                        confirmButtonColor: '#16a34a'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Request Failed',
+                        text: data.message,
+                        confirmButtonColor: '#ea580c'
+                    });
+                }
+            })
+            .catch(() => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Unable to communicate with the server.',
+                    confirmButtonColor: '#ea580c'
+                });
+            });
+        }
     </script>
-    <script src="usernavbar.js"></script>
+    <script src="usernavbar.js?v=1.3"></script>
 </body>
 
 </html>
